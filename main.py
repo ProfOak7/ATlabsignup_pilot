@@ -157,4 +157,6 @@ with st.expander("🔐 Admin Access"):
         st.dataframe(bookings_df)
         st.download_button("📤 Download CSV", bookings_df.to_csv(index=False), file_name="bookings.csv")
     elif passcode_input:
-        st.error("Incorrect passcode.")
+        st.error("
+::contentReference[oaicite:4]{index=4}
+ 
