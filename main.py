@@ -3,6 +3,8 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 
+ADMIN_PASSCODE = "OAK"  # You can change this to anything private
+
 st.set_page_config(page_title="Student Appointment Sign-Up", layout="centered")
 
 BOOKINGS_FILE = "bookings.csv"
@@ -82,8 +84,12 @@ if email and student_id:
                     st.stop()
 
 # --- Optional Admin View ---
-st.markdown("---")
-if st.checkbox("📋 Show all bookings (admin view)"):
-    st.dataframe(bookings_df)
-    with st.expander("📤 Download Bookings CSV"):
-        st.download_button("Download CSV", bookings_df.to_csv(index=False), file_name="bookings.csv")
+with st.expander("🔐 Admin Access"):
+    passcode_input = st.text_input("Enter admin passcode:", type="password")
+
+    if passcode_input == ADMIN_PASSCODE:
+        st.success("Access granted.")
+        st.dataframe(bookings_df)
+        st.download_button("📤 Download CSV", bookings_df.to_csv(index=False), file_name="bookings.csv")
+    elif passcode_input:
+        st.error("Incorrect passcode.")
