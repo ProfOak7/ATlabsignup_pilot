@@ -21,40 +21,9 @@ if os.path.exists(BOOKINGS_FILE):
 else:
     bookings_df = pd.DataFrame(columns=["name", "email", "student_id", "dsps", "slot"])
 
-# Email confirmation helper using SendGrid
-def send_confirmation_email(to_email, slot_info):
-    try:
-        sg_api_key = st.secrets["SENDGRID_API_KEY"]
-        from_email = st.secrets["FROM_EMAIL"]
-        
-        subject = "Your Cuesta Student Appointment Confirmation"
-        content = f"Hi,\n\nThis is to confirm your appointment:\n\n{slot_info}\n\nIf this was not you, please contact your instructor."
-
-        data = {
-            "personalizations": [{"to": [{"email": to_email}]}],
-            "from": {"email": from_email},
-            "subject": subject,
-            "content": [{"type": "text/plain", "value": content}]
-        }
-
-        headers = {
-            "Authorization": f"Bearer {sg_api_key}",
-            "Content-Type": "application/json"
-        }
-
-        response = requests.post("https://api.sendgrid.com/v3/mail/send", json=data, headers=headers)
-        if response.status_code != 202:
-            st.error("Failed to send confirmation email.")
-    except Exception as e:
-        st.error("Could not send email. Check API settings.")
-
 # Generate next week's Mon–Fri with 15-min slots
 today = datetime.today()
-days = []
-for i in range(7):
-    d = today + timedelta(days=i)
-    if d.weekday() < 5:
-        days.append(d)
+days = [today + timedelta(days=i) for i in range(7) if (today + timedelta(days=i)).weekday() < 5]
 
 single_slots = []
 slot_mapping = {}
@@ -122,25 +91,12 @@ if name and email and student_id:
             if dsps:
                 pair = double_blocks[st.session_state["selected_slot"]]
                 for s in pair:
-                    new_booking = pd.DataFrame([{
-                        "name": name,
-                        "email": email,
-                        "student_id": student_id,
-                        "dsps": dsps,
-                        "slot": s
-                    }])
+                    new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": s }])
                     bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
             else:
-                new_booking = pd.DataFrame([{
-                    "name": name,
-                    "email": email,
-                    "student_id": student_id,
-                    "dsps": dsps,
-                    "slot": st.session_state["selected_slot"]
-                }])
+                new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": st.session_state["selected_slot"] }])
                 bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
             bookings_df.to_csv(BOOKINGS_FILE, index=False)
-            send_confirmation_email(email, st.session_state["selected_slot"])
             st.success(f"Successfully booked {st.session_state['selected_slot']}!")
             st.session_state["selected_slot"] = None
             st.session_state["confirming"] = False
@@ -158,6 +114,21 @@ with st.expander("🔐 Admin Access"):
     if passcode_input == ADMIN_PASSCODE:
         st.success("Access granted.")
         st.dataframe(bookings_df)
-        st.download_button("📤 Download CSV", bookings_df.to_csv(index=False), file_name="bookings.csv")
+        st.download_button("📄 Download CSV", bookings_df.to_csv(index=False), file_name="bookings.csv")
+
+        st.subheader("Reschedule a Student Appointment")
+        if not bookings_df.empty:
+            options = [f"{row['name']} ({row['email']}) - {row['slot']}" for _, row in bookings_df.iterrows()]
+            selected = st.selectbox("Select a booking to reschedule", options)
+            index = options.index(selected)
+            current_booking = bookings_df.iloc[index]
+
+            available_slots = [s for s in single_slots if s not in bookings_df["slot"].values or s == current_booking["slot"]]
+            new_slot = st.selectbox("Choose a new time slot", available_slots)
+
+            if st.button("Reschedule"):
+                bookings_df.at[index, "slot"] = new_slot
+                bookings_df.to_csv(BOOKINGS_FILE, index=False)
+                st.success(f"Successfully rescheduled to {new_slot}!")
     elif passcode_input:
         st.error("Incorrect passcode.")
