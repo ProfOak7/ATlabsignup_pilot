@@ -115,31 +115,46 @@ if email and student_id:
                     st.rerun()
 
     if st.session_state["confirming"] and st.session_state["selected_slot"]:
-        with st.dialog("Confirm Your Appointment"):
-            st.write(f"You have selected: **{st.session_state['selected_slot']}**")
-            if st.button("Confirm"):
-                if dsps:
-                    pair = double_blocks[st.session_state["selected_slot"]]
-                    for s in pair:
-                        new_booking = pd.DataFrame([{
-                            "email": email,
-                            "student_id": student_id,
-                            "dsps": dsps,
-                            "slot": s
-                        }])
-                        bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
-                else:
+        st.subheader("Confirm Your Appointment")
+        st.write(f"You have selected: **{st.session_state['selected_slot']}**")
+        if st.button("Confirm"):
+            if dsps:
+                pair = double_blocks[st.session_state["selected_slot"]]
+                for s in pair:
                     new_booking = pd.DataFrame([{
                         "email": email,
                         "student_id": student_id,
                         "dsps": dsps,
-                        "slot": st.session_state["selected_slot"]
+                        "slot": s
                     }])
                     bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
-                bookings_df.to_csv(BOOKINGS_FILE, index=False)
-                send_confirmation_email(email, st.session_state["selected_slot"])
-                st.success(f"Successfully booked {st.session_state['selected_slot']}!")
-                st.session_state["selected_slot"] = None
-               
-::contentReference[oaicite:12]{index=12}
- 
+            else:
+                new_booking = pd.DataFrame([{
+                    "email": email,
+                    "student_id": student_id,
+                    "dsps": dsps,
+                    "slot": st.session_state["selected_slot"]
+                }])
+                bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
+            bookings_df.to_csv(BOOKINGS_FILE, index=False)
+            send_confirmation_email(email, st.session_state["selected_slot"])
+            st.success(f"Successfully booked {st.session_state['selected_slot']}!")
+            st.session_state["selected_slot"] = None
+            st.session_state["confirming"] = False
+            st.stop()
+        if st.button("Cancel"):
+            st.session_state["selected_slot"] = None
+            st.session_state["confirming"] = False
+            st.rerun()
+
+# Admin View
+st.markdown("---")
+with st.expander("🔐 Admin Access"):
+    passcode_input = st.text_input("Enter admin passcode:", type="password")
+
+    if passcode_input == ADMIN_PASSCODE:
+        st.success("Access granted.")
+        st.dataframe(bookings_df)
+        st.download_button("📤 Download CSV", bookings_df.to_csv(index=False), file_name="bookings.csv")
+    elif passcode_input:
+        st.error("Incorrect passcode.")
