@@ -97,7 +97,7 @@ if email and student_id:
         st.warning("You’ve already booked your allowed slot(s) this week.")
         st.stop()
 
-    st.subheader("Available Time Slots")
+    st.subheader("Available Time Slots - Please select a time and scroll to the bottom to confirm")
 
     if dsps:
         for label, pair in double_blocks.items():
