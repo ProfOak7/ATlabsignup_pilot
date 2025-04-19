@@ -19,7 +19,7 @@ if "confirming" not in st.session_state:
 if os.path.exists(BOOKINGS_FILE):
     bookings_df = pd.read_csv(BOOKINGS_FILE)
 else:
-    bookings_df = pd.DataFrame(columns=["email", "student_id", "dsps", "slot"])
+    bookings_df = pd.DataFrame(columns=["name", "email", "student_id", "dsps", "slot"])
 
 # Email confirmation helper using SendGrid
 def send_confirmation_email(to_email, slot_info):
@@ -82,6 +82,7 @@ for i in range(len(single_slots) - 1):
 # UI: Student Sign-In
 st.title("Student Appointment Sign-Up")
 
+name = st.text_input("Enter your full name:")
 email = st.text_input("Enter your official Cuesta email:")
 student_id = st.text_input("Enter your Student ID:")
 dsps = st.checkbox("I am a DSPS student")
@@ -91,7 +92,7 @@ if email:
         st.error("Please use your official Cuesta email ending in @my.cuesta.edu or @cuesta.edu")
         st.stop()
 
-if email and student_id:
+if name and email and student_id:
     booked_this_week = bookings_df[bookings_df["email"] == email]
     if not booked_this_week.empty:
         st.warning("You’ve already booked your allowed slot(s) this week.")
@@ -122,6 +123,7 @@ if email and student_id:
                 pair = double_blocks[st.session_state["selected_slot"]]
                 for s in pair:
                     new_booking = pd.DataFrame([{
+                        "name": name,
                         "email": email,
                         "student_id": student_id,
                         "dsps": dsps,
@@ -130,6 +132,7 @@ if email and student_id:
                     bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
             else:
                 new_booking = pd.DataFrame([{
+                    "name": name,
                     "email": email,
                     "student_id": student_id,
                     "dsps": dsps,
