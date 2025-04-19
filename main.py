@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 import requests
+from streamlit_calendar import calendar
 
 st.set_page_config(page_title="Student Appointment Sign-Up", layout="centered")
 
@@ -139,5 +140,29 @@ with st.expander("🔐 Admin Access"):
         st.success("Access granted.")
         st.dataframe(bookings_df)
         st.download_button("📤 Download CSV", bookings_df.to_csv(index=False), file_name="bookings.csv")
-    elif passcode_input:
-        st.error("Incorrect passcode.")
+
+        # Prepare calendar events
+        calendar_events = []
+        for index, row in bookings_df.iterrows():
+            slot_parts = row["slot"].split()
+            if len(slot_parts) >= 3:
+                date_str = slot_parts[1]
+                time_range = slot_parts[2]
+                start_time_str, end_time_str = time_range.split('–')
+                start_datetime_str = f"{date_str} {start_time_str}"
+                end_datetime_str = f"{date_str} {end_time_str}"
+                start_iso = datetime.strptime(start_datetime_str, "%m/%d/%y %I:%M").isoformat()
+                end_iso = datetime.strptime(end_datetime_str, "%m/%d/%y %I:%M").isoformat()
+                event = {
+                    "title": f"{row['email']} ({'DSPS' if row['dsps'] else 'Standard'})",
+                    "start": start_iso,
+                    "end": end_iso,
+                    "color": "#FF6C6C" if row['dsps'] else "#3D9DF3"
+                }
+                calendar_events.append(event)
+
+        # Define calendar options
+        calendar_options = {
+            "
+::contentReference[oaicite:2]{index=2}
+ 
