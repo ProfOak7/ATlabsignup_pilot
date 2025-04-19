@@ -54,9 +54,9 @@ student_id = st.text_input("Enter your Student ID:")
 dsps = st.checkbox("I am a DSPS student")
 
 if email:
-    if not email.lower().endswith("@my.cuesta.edu"):
-        st.error("Please use your official Cuesta email ending in @my.cuesta.edu")
-        st.stop()
+    if not (email.lower().endswith("@my.cuesta.edu") or email.lower().endswith("@cuesta.edu")):
+    st.error("Please use your official Cuesta email ending in @my.cuesta.edu or @cuesta.edu")
+    st.stop()
 
 if email and student_id:
     # Check if student already booked
