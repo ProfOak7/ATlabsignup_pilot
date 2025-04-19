@@ -136,26 +136,5 @@ if email and student_id:
                     if st.button(f"Select {slot}", key=slot):
                         st.session_state["selected_slot"] = slot
                         st.session_state["confirming"] = True
-
-                    if st.session_state["confirming"] and st.session_state["selected_slot"] == slot:
-                        with st.expander("Confirm Your Appointment", expanded=True):
-                            st.write(f"You have selected: **{slot}**")
-                            if st.button("Confirm", key=f"confirm_{slot}"):
-                                new_booking = pd.DataFrame([{
-                                    "email": email,
-                                    "student_id": student_id,
-                                    "dsps": dsps,
-                                    "slot": slot
-                                }])
-                                bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
-                                bookings_df.to_csv(BOOKINGS_FILE, index=False)
-                                send_confirmation_email(email, slot)
-                                st.success(f"Successfully booked {slot}!")
-                                st.session_state["selected_slot"] = None
-                                st.session_state["confirming"] = False
-                                st.stop()
-                            if st.button("Cancel", key=f"cancel_{slot}"):
-                                st.session_state["selected_slot"] = None
-                                st.session_state["confirming"] =
-::contentReference[oaicite:0]{index=0}
+::contentReference[oaicite:12]{index=12}
  
