@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime, timedelta
+import requests
 
 st.set_page_config(page_title="Student Appointment Sign-Up", layout="centered")
 
 BOOKINGS_FILE = "bookings.csv"
-ADMIN_PASSCODE = "cougar2025"  # You can change this!
+ADMIN_PASSCODE = "cougar2025"
 
 # Load or create bookings file
 if os.path.exists(BOOKINGS_FILE):
@@ -14,16 +15,43 @@ if os.path.exists(BOOKINGS_FILE):
 else:
     bookings_df = pd.DataFrame(columns=["email", "student_id", "dsps", "slot"])
 
-# --- Generate next week's Mon–Fri with 15-min slots ---
+# Email confirmation helper using SendGrid
+def send_confirmation_email(to_email, slot_info):
+    try:
+        sg_api_key = st.secrets["SENDGRID_API_KEY"]
+        from_email = st.secrets["FROM_EMAIL"]
+        
+        subject = "Your Cuesta Student Appointment Confirmation"
+        content = f"Hi,\n\nThis is to confirm your appointment:\n\n{slot_info}\n\nIf this was not you, please contact your instructor."
+
+        data = {
+            "personalizations": [{"to": [{"email": to_email}]}],
+            "from": {"email": from_email},
+            "subject": subject,
+            "content": [{"type": "text/plain", "value": content}]
+        }
+
+        headers = {
+            "Authorization": f"Bearer {sg_api_key}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post("https://api.sendgrid.com/v3/mail/send", json=data, headers=headers)
+        if response.status_code != 202:
+            st.error("Failed to send confirmation email.")
+    except Exception as e:
+        st.error("Could not send email. Check API settings.")
+
+# Generate next week's Mon–Fri with 15-min slots
 today = datetime.today()
 days = []
 for i in range(7):
     d = today + timedelta(days=i)
-    if d.weekday() < 5:  # Mon–Fri
+    if d.weekday() < 5:
         days.append(d)
 
 single_slots = []
-slot_mapping = {}  # Start–end time pairs for display
+slot_mapping = {}
 
 for day in days:
     current_time = datetime.combine(day.date(), datetime.strptime("09:00", "%H:%M").time())
@@ -37,7 +65,6 @@ for day in days:
         slot_mapping[label] = (current_time, current_time + timedelta(minutes=15))
         current_time += timedelta(minutes=15)
 
-# --- Generate DSPS double blocks (adjacent pairs) ---
 double_blocks = {}
 for i in range(len(single_slots) - 1):
     date1 = single_slots[i].split(" ")[1]
@@ -46,7 +73,7 @@ for i in range(len(single_slots) - 1):
         block_label = f"{single_slots[i]} and {single_slots[i+1]}"
         double_blocks[block_label] = [single_slots[i], single_slots[i+1]]
 
-# --- UI: Login and Input ---
+# UI: Student Sign-In
 st.title("Student Appointment Sign-Up")
 
 email = st.text_input("Enter your official Cuesta email:")
@@ -55,49 +82,55 @@ dsps = st.checkbox("I am a DSPS student")
 
 if email:
     if not (email.lower().endswith("@my.cuesta.edu") or email.lower().endswith("@cuesta.edu")):
-    st.error("Please use your official Cuesta email ending in @my.cuesta.edu or @cuesta.edu")
-    st.stop()
+        st.error("Please use your official Cuesta email ending in @my.cuesta.edu or @cuesta.edu")
+        st.stop()
 
 if email and student_id:
-    # Check if student already booked
     booked_this_week = bookings_df[bookings_df["email"] == email]
     if not booked_this_week.empty:
         st.warning("You’ve already booked your allowed slot(s) this week.")
         st.stop()
 
-    st.subheader("Available Time Slots")
+    confirm = st.checkbox("✅ I confirm that I want to book this appointment")
 
-    if dsps:
-        for label, pair in double_blocks.items():
-            if not any(s in bookings_df["slot"].values for s in pair):
-                if st.button(f"Book {label}"):
-                    for s in pair:
+    if confirm:
+        st.subheader("Available Time Slots")
+
+        if dsps:
+            for label, pair in double_blocks.items():
+                if not any(s in bookings_df["slot"].values for s in pair):
+                    if st.button(f"Book {label}"):
+                        for s in pair:
+                            new_booking = pd.DataFrame([{
+                                "email": email,
+                                "student_id": student_id,
+                                "dsps": dsps,
+                                "slot": s
+                            }])
+                            bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
+                        bookings_df.to_csv(BOOKINGS_FILE, index=False)
+                        send_confirmation_email(email, label)
+                        st.success(f"Successfully booked {label}!")
+                        st.stop()
+        else:
+            for slot in single_slots:
+                if slot not in bookings_df["slot"].values:
+                    if st.button(f"Book {slot}"):
                         new_booking = pd.DataFrame([{
                             "email": email,
                             "student_id": student_id,
                             "dsps": dsps,
-                            "slot": s
+                            "slot": slot
                         }])
                         bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
-                    bookings_df.to_csv(BOOKINGS_FILE, index=False)
-                    st.success(f"Successfully booked {label}!")
-                    st.stop()
+                        bookings_df.to_csv(BOOKINGS_FILE, index=False)
+                        send_confirmation_email(email, slot)
+                        st.success(f"Successfully booked {slot}!")
+                        st.stop()
     else:
-        for slot in single_slots:
-            if slot not in bookings_df["slot"].values:
-                if st.button(f"Book {slot}"):
-                    new_booking = pd.DataFrame([{
-                        "email": email,
-                        "student_id": student_id,
-                        "dsps": dsps,
-                        "slot": slot
-                    }])
-                    bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
-                    bookings_df.to_csv(BOOKINGS_FILE, index=False)
-                    st.success(f"Successfully booked {slot}!")
-                    st.stop()
+        st.info("Please confirm your booking before continuing.")
 
-# --- Admin Access ---
+# Admin View
 st.markdown("---")
 with st.expander("🔐 Admin Access"):
     passcode_input = st.text_input("Enter admin passcode:", type="password")
