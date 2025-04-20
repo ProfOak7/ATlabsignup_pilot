@@ -51,12 +51,13 @@ for i in range(len(single_slots) - 1):
         double_blocks[block_label] = [single_slots[i], single_slots[i+1]]
 
 # UI: Student Sign-In
-st.title("Student Appointment Sign-Up")
+st.title("Student AT Lab Appointment Sign-Up")
 
 name = st.text_input("Enter your full name:")
 email = st.text_input("Enter your official Cuesta email:")
 student_id = st.text_input("Enter your Student ID:")
 dsps = st.checkbox("I am a DSPS student")
+
 
 if email:
     if not (email.lower().endswith("@my.cuesta.edu") or email.lower().endswith("@cuesta.edu")):
