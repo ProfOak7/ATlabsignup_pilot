@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta
 import requests
 
-st.set_page_config(page_title="Student Appointment Sign-Up", layout="centered")
+st.set_page_config(page_title="Student AT Appointment Sign-Up", layout="centered")
 
 BOOKINGS_FILE = "bookings.csv"
 ADMIN_PASSCODE = "cougar2025"
