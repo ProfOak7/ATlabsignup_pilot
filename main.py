@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta
 import requests
 
-st.set_page_config(page_title="Student AT Appointment Sign-Up", layout="centered")
+st.set_page_config(page_title="Student Appointment Sign-Up", layout="centered")
 
 BOOKINGS_FILE = "bookings.csv"
 ADMIN_PASSCODE = "cougar2025"
@@ -57,6 +57,8 @@ name = st.text_input("Enter your full name:")
 email = st.text_input("Enter your official Cuesta email:")
 student_id = st.text_input("Enter your Student ID:")
 dsps = st.checkbox("I am a DSPS student")
+
+
 
 
 if email:
