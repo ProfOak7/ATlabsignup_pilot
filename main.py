@@ -51,7 +51,7 @@ for i in range(len(single_slots) - 1):
         double_blocks[block_label] = [single_slots[i], single_slots[i+1]]
 
 # UI: Student Sign-In
-st.title("Student AT Lab Appointment Sign-Up")
+st.title("Student AT Appointment Sign-Up")
 
 name = st.text_input("Enter your full name:")
 email = st.text_input("Enter your official Cuesta email:")
