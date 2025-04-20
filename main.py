@@ -26,18 +26,20 @@ today = datetime.today()
 days = [today + timedelta(days=i) for i in range(7) if (today + timedelta(days=i)).weekday() < 5]
 
 single_slots = []
-slot_mapping = {}
+slots_by_day = {}
 
 for day in days:
     current_time = datetime.combine(day.date(), datetime.strptime("09:00", "%H:%M").time())
     end_time = datetime.combine(day.date(), datetime.strptime("17:00", "%H:%M").time())
+    label_day = day.strftime('%A %m/%d/%y')
+    slots_by_day[label_day] = []
     while current_time < end_time:
         start_label = current_time.strftime("%-I:%M")
         end_label = (current_time + timedelta(minutes=15)).strftime("%-I:%M %p")
         slot_time_label = f"{start_label}–{end_label}"
-        label = f"{day.strftime('%A %m/%d/%y')} {slot_time_label}"
+        label = f"{label_day} {slot_time_label}"
         single_slots.append(label)
-        slot_mapping[label] = (current_time, current_time + timedelta(minutes=15))
+        slots_by_day[label_day].append(label)
         current_time += timedelta(minutes=15)
 
 double_blocks = {}
@@ -67,35 +69,26 @@ if name and email and student_id:
         st.warning("You’ve already booked your allowed slot(s) this week.")
         st.stop()
 
-    st.subheader("Available Time Slots - Please select a time and scroll to the bottom to confirm")
+    st.subheader("Available Time Slots")
+    selected_day = st.selectbox("Choose a day:", list(slots_by_day.keys()))
 
-    if dsps:
-        for label, pair in double_blocks.items():
-            if not any(s in bookings_df["slot"].values for s in pair):
-                if st.button(f"Select {label}"):
-                    st.session_state["selected_slot"] = label
-                    st.session_state["confirming"] = True
-                    st.rerun()
+    available_slots = [s for s in slots_by_day[selected_day] if s not in bookings_df["slot"].values]
+
+    if available_slots:
+        selected_time = st.selectbox("Choose a time:", available_slots)
+        if st.button("Select This Time"):
+            st.session_state["selected_slot"] = selected_time
+            st.session_state["confirming"] = True
+            st.rerun()
     else:
-        for slot in single_slots:
-            if slot not in bookings_df["slot"].values:
-                if st.button(f"Select {slot}"):
-                    st.session_state["selected_slot"] = slot
-                    st.session_state["confirming"] = True
-                    st.rerun()
+        st.info("No available slots for this day.")
 
     if st.session_state["confirming"] and st.session_state["selected_slot"]:
         st.subheader("Confirm Your Appointment")
         st.write(f"You have selected: **{st.session_state['selected_slot']}**")
         if st.button("Confirm"):
-            if dsps:
-                pair = double_blocks[st.session_state["selected_slot"]]
-                for s in pair:
-                    new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": s }])
-                    bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
-            else:
-                new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": st.session_state["selected_slot"] }])
-                bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
+            new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": st.session_state["selected_slot"] }])
+            bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
             bookings_df.to_csv(BOOKINGS_FILE, index=False)
             st.success(f"Successfully booked {st.session_state['selected_slot']}!")
             st.session_state["selected_slot"] = None
@@ -123,8 +116,8 @@ with st.expander("🔐 Admin Access"):
             index = options.index(selected)
             current_booking = bookings_df.iloc[index]
 
-            available_slots = [s for s in single_slots if s not in bookings_df["slot"].values or s == current_booking["slot"]]
-            new_slot = st.selectbox("Choose a new time slot", available_slots)
+            all_available_slots = [s for s in single_slots if s not in bookings_df["slot"].values or s == current_booking["slot"]]
+            new_slot = st.selectbox("Choose a new time slot", all_available_slots)
 
             if st.button("Reschedule"):
                 bookings_df.at[index, "slot"] = new_slot
