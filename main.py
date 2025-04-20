@@ -99,6 +99,9 @@ if name and email and student_id:
             st.session_state["confirming"] = False
             st.rerun()
 
+    if st.button("Need to Reschedule?"):
+        st.info("To reschedule your appointment, please contact a current AT Lab professor.")
+
 # Admin View
 st.markdown("---")
 with st.expander("🔐 Admin Access"):
