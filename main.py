@@ -57,7 +57,7 @@ calendar_data = bookings_df.copy()
 if not calendar_data.empty:
     calendar_data["first_name"] = calendar_data["name"].apply(lambda x: x.split(" ")[0] if pd.notnull(x) else "")
     calendar_data["day"] = calendar_data["slot"].apply(lambda x: " ".join(x.split(" ")[:2]))
-    grouped = dict(sorted(calendar_data.groupby("day"), key=lambda x: datetime.strptime(x[0], "%A %m/%d/%y")))
+    grouped = dict
 
     for day, group in grouped:
         with st.expander(f"{day} ({len(group)} sign-up{'s' if len(group) != 1 else ''})"):
