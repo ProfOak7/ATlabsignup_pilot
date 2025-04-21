@@ -92,10 +92,14 @@ if email:
         st.stop()
 
 if name and email and student_id:
-    booked_this_week = bookings_df[bookings_df["email"] == email]
-    if not booked_this_week.empty:
-        st.warning("You’ve already booked your allowed slot(s) this week.")
-        st.stop()
+        if st.session_state.get("selected_slot"):
+        selected_week = datetime.strptime(st.session_state["selected_slot"].split(" ")[1], "%m/%d/%y").isocalendar().week
+        booked_weeks = bookings_df[bookings_df["email"] == email]["slot"].apply(
+            lambda s: datetime.strptime(s.split(" ")[1], "%m/%d/%y").isocalendar().week
+        )
+        if selected_week in booked_weeks.values:
+            st.warning("You’ve already booked a slot that week. Students may only sign up once per week.")
+            st.stop()
 
     st.subheader("Available Time Slots")
     selected_day = st.selectbox("Choose a day:", list(slots_by_day.keys()))
