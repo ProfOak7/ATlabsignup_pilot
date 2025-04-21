@@ -55,6 +55,9 @@ st.subheader("Current Sign-Ups")
 
 calendar_data = bookings_df.copy()
 if not calendar_data.empty:
+    now = datetime.now()
+    calendar_data["slot_dt"] = calendar_data["slot"].apply(lambda x: datetime.strptime(" ".join(x.split(" ")[1:3]), "%m/%d/%y %I:%M"))
+    calendar_data = calendar_data[calendar_data["slot_dt"] > now]
     calendar_data["first_name"] = calendar_data["name"].apply(lambda x: x.split(" ")[0] if pd.notnull(x) else "")
     calendar_data["day"] = calendar_data["slot"].apply(lambda x: " ".join(x.split(" ")[:2]))
     grouped = calendar_data.groupby("day")
