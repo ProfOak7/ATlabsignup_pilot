@@ -62,7 +62,7 @@ if not calendar_data.empty:
     sorted_days = sorted(grouped.groups.keys(), key=lambda d: datetime.strptime(" ".join(d.split(" ")[1:]), "%m/%d/%y"))
 
     for day in sorted_days:
-        group = grouped.get_group(day):
+        group = grouped.get_group(day)
         with st.expander(f"{day} ({len(group)} sign-up{'s' if len(group) != 1 else ''})"):
             view = group[["first_name", "slot"]].sort_values("slot")
             view = view.rename(columns={"first_name": "Student", "slot": "Time Slot"}).reset_index(drop=True)
