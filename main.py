@@ -7,7 +7,7 @@ import requests
 st.set_page_config(page_title="Student Appointment Sign-Up", layout="centered")
 
 BOOKINGS_FILE = "bookings.csv"
-ADMIN_PASSCODE = "cougar2025"
+ADMIN_PASSCODE = "OAK"
 
 # Initialize session state variables
 if "selected_slot" not in st.session_state:
