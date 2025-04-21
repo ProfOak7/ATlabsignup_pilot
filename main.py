@@ -92,7 +92,7 @@ if email:
         st.stop()
 
 if name and email and student_id:
-        if st.session_state.get("selected_slot"):
+            if st.session_state.get("selected_slot"):
         selected_week = datetime.strptime(st.session_state["selected_slot"].split(" ")[1], "%m/%d/%y").isocalendar().week
         booked_weeks = bookings_df[bookings_df["email"] == email]["slot"].apply(
             lambda s: datetime.strptime(s.split(" ")[1], "%m/%d/%y").isocalendar().week
