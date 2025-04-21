@@ -56,8 +56,14 @@ st.subheader("Current Sign-Ups")
 calendar_data = bookings_df.copy()
 if not calendar_data.empty:
     calendar_data["first_name"] = calendar_data["name"].apply(lambda x: x.split(" ")[0] if pd.notnull(x) else "")
-    calendar_view = calendar_data[["first_name", "slot"]].sort_values("slot")
-    st.dataframe(calendar_view.rename(columns={"first_name": "Student", "slot": "Time Slot"}))
+    calendar_data["day"] = calendar_data["slot"].apply(lambda x: " ".join(x.split(" ")[:2]))
+    grouped = calendar_data.groupby("day")
+
+    for day, group in grouped:
+        with st.expander(f"{day} ({len(group)} sign-up{'s' if len(group) != 1 else ''})"):
+            view = group[["first_name", "slot"]].sort_values("slot")
+            view = view.rename(columns={"first_name": "Student", "slot": "Time Slot"}).reset_index(drop=True)
+            st.dataframe(view)
 else:
     st.info("No appointments have been scheduled yet.")
 
