@@ -61,9 +61,9 @@ if not calendar_data.empty:
     calendar_data["first_name"] = calendar_data["name"].apply(lambda x: x.split(" ")[0] if pd.notnull(x) else "")
     calendar_data["day"] = calendar_data["slot"].apply(lambda x: " ".join(x.split(" ")[:2]))
     grouped = calendar_data.groupby("day")
-sorted_days = sorted(grouped.groups.keys(), key=lambda d: datetime.strptime(d.split(" ")[1], "%m/%d/%y"))
+    sorted_days = sorted(grouped.groups.keys(), key=lambda d: datetime.strptime(d.split(" ")[1], "%m/%d/%y"))
 
-for day in sorted_days:
+    for day in sorted_days:
         group = grouped.get_group(day)
         with st.expander(f"{day} ({len(group)} sign-up{'s' if len(group) != 1 else ''})"):
             view = group[["first_name", "slot"]].sort_values("slot")
@@ -92,6 +92,9 @@ if email:
         st.stop()
 
 if name and email and student_id:
+    if not student_id.startswith("900"):
+        st.error("Student ID must start with 900.")
+        st.stop()
     if st.session_state.get("selected_slot"):
         selected_week = datetime.strptime(st.session_state["selected_slot"].split(" ")[1], "%m/%d/%y").isocalendar().week
         booked_weeks = bookings_df[bookings_df["email"] == email]["slot"].apply(
