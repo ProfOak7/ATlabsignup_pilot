@@ -66,8 +66,7 @@ for day in sorted_days:
             view = group[["first_name", "slot"]].sort_values("slot")
             view = view.rename(columns={"first_name": "Student", "slot": "Time Slot"}).reset_index(drop=True)
             st.dataframe(view)
-else:
-    st.info("No appointments have been scheduled yet.")
+
 
 
 # UI: Student Sign-In
