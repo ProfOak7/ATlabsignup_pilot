@@ -80,7 +80,7 @@ email = st.text_input("Enter your official Cuesta email:")
 student_id = st.text_input("Enter your Student ID:")
 dsps = st.checkbox("I am a DSPS student")
 if st.button("Need to Reschedule?"):
-        st.info("To reschedule your appointment, please contact a current AT Lab professor.")
+        st.info("To reschedule your appointment, please speak with the current professor in the AT Lab.")
 
 
 
