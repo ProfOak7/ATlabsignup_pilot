@@ -7,7 +7,7 @@ import requests
 st.set_page_config(page_title="Student Appointment Sign-Up", layout="centered")
 
 BOOKINGS_FILE = "bookings.csv"
-ADMIN_PASSCODE = "OAK"
+ADMIN_PASSCODE = "cougar2025"
 
 # Initialize session state variables
 if "selected_slot" not in st.session_state:
@@ -49,6 +49,18 @@ for i in range(len(single_slots) - 1):
     if date1 == date2:
         block_label = f"{single_slots[i]} and {single_slots[i+1]}"
         double_blocks[block_label] = [single_slots[i], single_slots[i+1]]
+
+# 📅 Calendar View of Current Sign-Ups (First Name Only)
+st.subheader("Current Sign-Ups")
+
+calendar_data = bookings_df.copy()
+if not calendar_data.empty:
+    calendar_data["first_name"] = calendar_data["name"].apply(lambda x: x.split(" ")[0] if pd.notnull(x) else "")
+    calendar_view = calendar_data[["first_name", "slot"]].sort_values("slot")
+    st.dataframe(calendar_view.rename(columns={"first_name": "Student", "slot": "Time Slot"}))
+else:
+    st.info("No appointments have been scheduled yet.")
+
 
 # UI: Student Sign-In
 st.title("Student AT Appointment Sign-Up")
