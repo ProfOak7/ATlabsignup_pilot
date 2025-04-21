@@ -57,7 +57,7 @@ calendar_data = bookings_df.copy()
 if not calendar_data.empty:
     now = datetime.now()
     calendar_data["slot_dt"] = calendar_data["slot"].apply(lambda x: datetime.strptime(" ".join(x.split(" ")[1:2]), "%m/%d/%y"))
-    calendar_data = calendar_data[calendar_data["slot_dt"] > now]
+    calendar_data = calendar_data[calendar_data["slot_dt"] >= now.date()]
     calendar_data["first_name"] = calendar_data["name"].apply(lambda x: x.split(" ")[0] if pd.notnull(x) else "")
     calendar_data["day"] = calendar_data["slot"].apply(lambda x: " ".join(x.split(" ")[:2]))
     grouped = calendar_data.groupby("day")
