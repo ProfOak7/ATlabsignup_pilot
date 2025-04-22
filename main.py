@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta
 import requests
 
-st.set_page_config(page_title="Student Appointment Sign-Up", layout="centered")
+st.set_page_config(page_title="Student Appointment Sign-Up", layout="wide")
 
 BOOKINGS_FILE = "bookings.csv"
 ADMIN_PASSCODE = "cougar2025"
@@ -51,25 +51,40 @@ for i in range(len(single_slots) - 1):
         double_blocks[block_label] = [single_slots[i], single_slots[i+1]]
 
 # 📅 Calendar View of Current Sign-Ups (First Name Only)
-st.subheader("Current Sign-Ups")
+st.sidebar.title("Navigation")
+selected_tab = st.sidebar.radio("Go to:", ["Sign-Up", "Admin View", "Availability Settings"])
 
-calendar_data = bookings_df.copy()
-if not calendar_data.empty:
-    now = datetime.now()
-    calendar_data["slot_dt"] = calendar_data["slot"].apply(lambda x: datetime.strptime(x.split(" ")[1], "%m/%d/%y"))
-    calendar_data = calendar_data[calendar_data["slot_dt"].dt.date >= now.date()]
-    calendar_data["first_name"] = calendar_data["name"].apply(lambda x: x.split(" ")[0] if pd.notnull(x) else "")
-    calendar_data["day"] = calendar_data["slot"].apply(lambda x: " ".join(x.split(" ")[:2]))
-    grouped = calendar_data.groupby("day")
-    sorted_days = sorted(grouped.groups.keys(), key=lambda d: datetime.strptime(d.split(" ")[1], "%m/%d/%y"))
+if selected_tab == "Sign-Up":
+    st.subheader("Current Sign-Ups")
+    calendar_data = bookings_df.copy()
+    if not calendar_data.empty:
+        now = datetime.now()
+        calendar_data["slot_dt"] = calendar_data["slot"].apply(lambda x: datetime.strptime(x.split(" ")[1], "%m/%d/%y"))
+        calendar_data = calendar_data[calendar_data["slot_dt"].dt.date >= now.date()]
+        calendar_data["first_name"] = calendar_data["name"].apply(lambda x: x.split(" ")[0] if pd.notnull(x) else "")
+        calendar_data["day"] = calendar_data["slot"].apply(lambda x: " ".join(x.split(" ")[:2]))
+        grouped = calendar_data.groupby("day")
+        sorted_days = sorted(grouped.groups.keys(), key=lambda d: datetime.strptime(d.split(" ")[1], "%m/%d/%y"))
 
-    for day in sorted_days:
-        group = grouped.get_group(day)
-        with st.expander(f"{day} ({len(group)} sign-up{'s' if len(group) != 1 else ''})"):
-            view = group[["first_name", "slot"]].sort_values("slot")
-            view = view.rename(columns={"first_name": "Student", "slot": "Time Slot"}).reset_index(drop=True)
-            st.dataframe(view)
-
+        for day in sorted_days:
+            group = grouped.get_group(day)
+            with st.expander(f"{day} ({len(group)} sign-up{'s' if len(group) != 1 else ''})"):
+                # Merge DSPS double bookings into a single row
+                grouped_view = group.sort_values("slot").groupby(["first_name"])
+                display_rows = []
+                for name, slots in grouped_view:
+                    sorted_slots = slots["slot"].tolist()
+                    if len(sorted_slots) == 2:
+                        start = sorted_slots[0].rsplit(" ", 1)[-1].split("–")[0]
+                        end = sorted_slots[1].rsplit(" ", 1)[-1].split("–")[-1]
+                        label = f"{sorted_slots[0].rsplit(' ', 1)[0]} {start}–{end}"
+                        display_rows.append({"Student": name, "Time Slot": label})
+                    else:
+                        for s in sorted_slots:
+                            display_rows.append({"Student": name, "Time Slot": s})
+                st.dataframe(pd.DataFrame(display_rows))
+    else:
+        st.info("No appointments have been scheduled yet.")
 
 
 # UI: Student Sign-In
@@ -81,10 +96,6 @@ student_id = st.text_input("Enter your Student ID:")
 dsps = st.checkbox("I am a DSPS student")
 if st.button("Need to Reschedule?"):
         st.info("To reschedule your appointment, please speak with the current professor in the AT Lab.")
-
-
-
-
 
 if email:
     if not (email.lower().endswith("@my.cuesta.edu") or email.lower().endswith("@cuesta.edu")):
@@ -107,23 +118,45 @@ if name and email and student_id:
     st.subheader("Available Time Slots")
     selected_day = st.selectbox("Choose a day:", list(slots_by_day.keys()))
 
-    available_slots = [s for s in slots_by_day[selected_day] if s not in bookings_df["slot"].values]
-
-    if available_slots:
-        selected_time = st.selectbox("Choose a time:", available_slots)
-        if st.button("Select This Time"):
-            st.session_state["selected_slot"] = selected_time
-            st.session_state["confirming"] = True
-            st.rerun()
+    available_file = "available_slots.csv"
+    if os.path.exists(available_file):
+        availability_df = pd.read_csv(available_file)
+        allowed_slots = availability_df[availability_df["available"]]["slot"].tolist()
     else:
-        st.info("No available slots for this day.")
+        allowed_slots = single_slots
+
+    if dsps:
+        double_slot_options = [label for label in double_blocks if selected_day in label and all(s in allowed_slots and s not in bookings_df["slot"].values for s in double_blocks[label])]
+        if double_slot_options:
+            selected_block = st.selectbox("Choose a double time block:", double_slot_options)
+            if st.button("Select This Time Block"):
+                st.session_state["selected_slot"] = selected_block
+                st.session_state["confirming"] = True
+                st.rerun()
+        else:
+            st.info("No available double blocks for this day.")
+    else:
+        available_slots = [s for s in slots_by_day[selected_day] if s not in bookings_df["slot"].values and s in allowed_slots]
+        if available_slots:
+            selected_time = st.selectbox("Choose a time:", available_slots)
+            if st.button("Select This Time"):
+                st.session_state["selected_slot"] = selected_time
+                st.session_state["confirming"] = True
+                st.rerun()
+        else:
+            st.info("No available slots for this day.")
 
     if st.session_state["confirming"] and st.session_state["selected_slot"]:
         st.subheader("Confirm Your Appointment")
         st.write(f"You have selected: **{st.session_state['selected_slot']}**")
         if st.button("Confirm"):
-            new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": st.session_state["selected_slot"] }])
-            bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
+            if dsps and " and " in st.session_state["selected_slot"]:
+                for s in double_blocks[st.session_state["selected_slot"]]:
+                    new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": s }])
+                    bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
+            else:
+                new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": st.session_state["selected_slot"] }])
+                bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
             bookings_df.to_csv(BOOKINGS_FILE, index=False)
             st.success(f"Successfully booked {st.session_state['selected_slot']}!")
             st.session_state["selected_slot"] = None
@@ -136,9 +169,10 @@ if name and email and student_id:
 
 
 # Admin View
-st.markdown("---")
-with st.expander("🔐 Admin Access"):
-    passcode_input = st.text_input("Enter admin passcode:", type="password")
+elif selected_tab == "Admin View":
+    st.markdown("---")
+    with st.expander("🔐 Admin Access"):
+        passcode_input = st.text_input("Enter admin passcode:", type="password")
 
     if passcode_input == ADMIN_PASSCODE:
         st.success("Access granted.")
@@ -160,4 +194,35 @@ with st.expander("🔐 Admin Access"):
                 bookings_df.to_csv(BOOKINGS_FILE, index=False)
                 st.success(f"Successfully rescheduled to {new_slot}!")
     elif passcode_input:
+        st.error("Incorrect passcode.")
+
+# Availability Settings
+elif selected_tab == "Availability Settings":
+    st.markdown("---")
+    with st.expander("🔒 Availability Admin Access"):
+        availability_passcode = st.text_input("Enter availability admin passcode:", type="password")
+
+    AVAILABILITY_PASSCODE = "atlabadmin2025"
+
+    if availability_passcode == AVAILABILITY_PASSCODE:
+        st.success("Access granted to Availability Settings.")
+        available_file = "available_slots.csv"
+        if os.path.exists(available_file):
+            availability_df = pd.read_csv(available_file)
+        else:
+            availability_df = pd.DataFrame({"slot": single_slots, "available": [True]*len(single_slots)})
+
+        selected_available = st.multiselect(
+            "Select available time slots:",
+            options=single_slots,
+            default=availability_df[availability_df["available"]]["slot"].tolist(),
+            key="availability_selector"
+        )
+
+        availability_df["available"] = availability_df["slot"].isin(selected_available)
+
+        if st.button("Save Availability"):
+            availability_df.to_csv(available_file, index=False)
+            st.success("Availability updated successfully!")
+    elif availability_passcode:
         st.error("Incorrect passcode.")
