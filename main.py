@@ -24,14 +24,14 @@ else:
 
 # Generate next week's Mon–Fri with 15-min slots
 today = datetime.today()
-days = [today + timedelta(days=i) for i in range(21) if (today + timedelta(days=i)).weekday() < 5]
+days = [today + timedelta(days=i) for i in range(21) if (today + timedelta(days=i)).weekday() < 6]
 
 single_slots = []
 slots_by_day = {}
 
 for day in days:
-    current_time = datetime.combine(day.date(), datetime.strptime("09:00", "%H:%M").time())
-    end_time = datetime.combine(day.date(), datetime.strptime("17:00", "%H:%M").time())
+    current_time = datetime.combine(day.date(), datetime.strptime("08:00", "%H:%M").time())
+    end_time = datetime.combine(day.date(), datetime.strptime("22:00", "%H:%M").time())
     label_day = day.strftime('%A %m/%d/%y')
     slots_by_day[label_day] = []
     while current_time < end_time:
@@ -116,10 +116,10 @@ if name and email and student_id:
                 bookings_df["slot"].apply(lambda s: datetime.strptime(s.split(" ")[1], "%m/%d/%y").isocalendar().week == selected_week)
             )]
 
-            # Prevent rescheduling on the same day
+                        # Prevent rescheduling on the same day
             today_str = datetime.today().strftime("%m/%d/%y")
-            booking_dates = [b.split(" ")[1] for b in weekly_bookings["slot"]]
-            if today_str in booking_dates:
+            today_bookings = [b for b in weekly_bookings["slot"] if b.split(" ")[1] == today_str]
+            if today_bookings:
                 st.warning("You cannot reschedule an appointment on the same day. Please speak with a professor if needed.")
                 st.stop()
 
@@ -279,17 +279,33 @@ elif selected_tab == "Availability Settings":
         else:
             availability_df = pd.DataFrame({"slot": single_slots, "available": [True]*len(single_slots)})
 
-        selected_available = st.multiselect(
-            "Select available time slots:",
-            options=single_slots,
-            default=availability_df[availability_df["available"]]["slot"].tolist(),
-            key="availability_selector"
-        )
+        selected_by_day = {}
 
+        for day, slots in slots_by_day.items():
+            with st.expander(f"{day}"):
+                if st.button(f"Select All {day}", key=f"select_all_{day}"):
+                    for slot in slots:
+                        st.session_state[f"avail_{slot}"] = True
+
+                if st.button(f"Deselect All {day}", key=f"deselect_all_{day}"):
+                    for slot in slots:
+                        st.session_state[f"avail_{slot}"] = False
+
+                weekday_label = day.split()[0]
+                
+
+                selected_by_day[day] = []
+                for slot in slots:
+                    is_selected = availability_df.loc[availability_df["slot"] == slot, "available"].values[0] if slot in availability_df["slot"].values else False
+                    checked = st.checkbox(slot.split(" ")[-2] + " " + slot.split(" ")[-1], value=st.session_state.get(f"avail_{slot}", is_selected), key=f"avail_{slot}")
+                    if checked:
+                        selected_by_day[day].append(slot)
+
+        selected_available = [slot for slots in selected_by_day.values() for slot in slots]
         availability_df["available"] = availability_df["slot"].isin(selected_available)
 
         if st.button("Save Availability"):
             availability_df.to_csv(available_file, index=False)
             st.success("Availability updated successfully!")
     elif availability_passcode:
-          st.error("Incorrect passcode.")
+        st.error("Incorrect passcode.")
