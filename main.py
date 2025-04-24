@@ -18,12 +18,13 @@ if "confirming" not in st.session_state:
 # Load or create bookings file
 if os.path.exists(BOOKINGS_FILE):
     bookings_df = pd.read_csv(BOOKINGS_FILE)
+    
 else:
     bookings_df = pd.DataFrame(columns=["name", "email", "student_id", "dsps", "slot"])
 
 # Generate next week's Mon–Fri with 15-min slots
 today = datetime.today()
-days = [today + timedelta(days=i) for i in range(14) if (today + timedelta(days=i)).weekday() < 5]
+days = [today + timedelta(days=i) for i in range(21) if (today + timedelta(days=i)).weekday() < 5]
 
 single_slots = []
 slots_by_day = {}
@@ -70,9 +71,9 @@ if selected_tab == "Sign-Up":
             group = grouped.get_group(day)
             with st.expander(f"{day} ({len(group)} sign-up{'s' if len(group) != 1 else ''})"):
                 # Merge DSPS double bookings into a single row
-                grouped_view = group.sort_values("slot").groupby(["first_name"])
+                grouped_view = group.sort_values("slot").groupby(["first_name", "email"])
                 display_rows = []
-                for name, slots in grouped_view:
+                for (name, _), slots in grouped_view:
                     sorted_slots = slots["slot"].tolist()
                     if len(sorted_slots) == 2:
                         start = sorted_slots[0].rsplit(" ", 1)[-1].split("–")[0]
@@ -94,8 +95,7 @@ name = st.text_input("Enter your full name:")
 email = st.text_input("Enter your official Cuesta email:")
 student_id = st.text_input("Enter your Student ID:")
 dsps = st.checkbox("I am a DSPS student")
-if st.button("Need to Reschedule?"):
-        st.info("To reschedule your appointment, please speak with the current professor in the AT Lab.")
+
 
 if email:
     if not (email.lower().endswith("@my.cuesta.edu") or email.lower().endswith("@cuesta.edu")):
@@ -112,8 +112,33 @@ if name and email and student_id:
             lambda s: datetime.strptime(s.split(" ")[1], "%m/%d/%y").isocalendar().week
         )
         if selected_week in booked_weeks.values:
-            st.warning("You’ve already booked a slot that week. Students may only sign up once per week.")
-            st.stop()
+            weekly_bookings = bookings_df[(bookings_df["email"] == email) & (
+                bookings_df["slot"].apply(lambda s: datetime.strptime(s.split(" ")[1], "%m/%d/%y").isocalendar().week == selected_week)
+            )]
+
+            # Prevent rescheduling on the same day
+            today_str = datetime.today().strftime("%m/%d/%y")
+            booking_dates = [b.split(" ")[1] for b in weekly_bookings["slot"]]
+            if today_str in booking_dates:
+                st.warning("You cannot reschedule an appointment on the same day. Please speak with a professor if needed.")
+                st.stop()
+
+            if len(weekly_bookings) == 1:
+                bookings_df = bookings_df[~((bookings_df["email"] == email) & (bookings_df["slot"].isin(weekly_bookings["slot"])))].copy()
+                st.info("Your previous booking for this week will be replaced with the new one.")
+            elif len(weekly_bookings) == 2 and weekly_bookings.iloc[0]['dsps']:
+                for s in weekly_bookings["slot"]:
+                    bookings_df = bookings_df[~((bookings_df["email"] == email) & (bookings_df["slot"] == s))].copy()
+                st.info("Your DSPS booking for this week will be replaced with the new one.")
+            else:
+                st.warning("Unable to determine which appointment to reschedule. Please contact an administrator.")
+                st.stop()
+                # Prevent rescheduling on the same day
+                today_str = datetime.today().strftime("%m/%d/%y")
+                booking_dates = [b.split(" ")[1] for b in weekly_bookings["slot"]]
+                if today_str in booking_dates:
+                    st.warning("You cannot reschedule an appointment on the same day. Please speak with a professor if needed.")
+                    st.stop()
 
     st.subheader("Available Time Slots")
     selected_day = st.selectbox("Choose a day:", list(slots_by_day.keys()))
@@ -154,9 +179,9 @@ if name and email and student_id:
                 for s in double_blocks[st.session_state["selected_slot"]]:
                     new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": s }])
                     bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
-            else:
-                new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": st.session_state["selected_slot"] }])
-                bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
+        else:
+            new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": st.session_state["selected_slot"] }])
+            bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
             bookings_df.to_csv(BOOKINGS_FILE, index=False)
             st.success(f"Successfully booked {st.session_state['selected_slot']}!")
             st.session_state["selected_slot"] = None
@@ -178,6 +203,14 @@ elif selected_tab == "Admin View":
         st.success("Access granted.")
         st.dataframe(bookings_df)
         st.download_button("📄 Download CSV", bookings_df.to_csv(index=False), file_name="bookings.csv")
+
+        # New feature: Download today's sign-ups in chronological order
+        st.subheader("Download Today's Sign-Ups")
+        today_str = datetime.today().strftime("%m/%d/%y")
+        todays_df = bookings_df[bookings_df["slot"].str.contains(today_str)].copy()
+        todays_df["slot_dt"] = todays_df["slot"].apply(lambda x: datetime.strptime(f"{x.split()[1]} {x.split()[2].split('–')[0]} {x.split()[3]}", "%m/%d/%y %I:%M %p"))
+        todays_df = todays_df.sort_values("slot_dt").drop(columns=["slot_dt"])
+        st.download_button("📅 Download Today's Appointments", todays_df.to_csv(index=False), file_name="todays_appointments.csv")
 
         st.subheader("Reschedule a Student Appointment")
         if not bookings_df.empty:
