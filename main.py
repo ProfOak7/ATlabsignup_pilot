@@ -221,9 +221,6 @@ elif selected_tab == "Admin View":
         else:
             st.info("No appointments scheduled for today.")
 
-    elif passcode_input:
-        st.error("Incorrect passcode.")
-
         st.subheader("Reschedule a Student Appointment")
         if not bookings_df.empty:
             options = [f"{row['name']} ({row['email']}) - {row['slot']}" for _, row in bookings_df.iterrows()]
@@ -244,7 +241,7 @@ elif selected_tab == "Admin View":
                     slot_display_options.append(display_label)
                     slot_lookup[display_label] = pair[0]
 
-            if current_booking["dsps"]:
+            if current_booking["dsps"] and slot_display_options:
                 new_display_label = st.selectbox("Choose a new 30-minute block", slot_display_options)
                 new_slot = slot_lookup[new_display_label]
             else:
@@ -274,6 +271,9 @@ elif selected_tab == "Admin View":
                     st.success(f"Successfully rescheduled to {new_slot}!")
 
                 bookings_df.to_csv(BOOKINGS_FILE, index=False)
+
+    elif passcode_input:
+        st.error("Incorrect passcode.")
 
 # --- Availability Settings Tab ---
 elif selected_tab == "Availability Settings":
