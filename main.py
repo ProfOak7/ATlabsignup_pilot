@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime, timedelta
+import pytz
 
 # --- Configuration ---
 st.set_page_config(page_title="Student Appointment Sign-Up", layout="wide")
@@ -27,7 +28,7 @@ if "lab_location" not in bookings_df.columns:
     bookings_df["lab_location"] = "SLO AT Lab"
 
 # --- Generate Slot Templates ---
-today = datetime.today()
+today = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0)
 days = [today + timedelta(days=i) for i in range(21)]
 
 slo_hours = {
@@ -82,7 +83,18 @@ selected_tab = st.sidebar.radio("Go to:", ["Sign-Up", "Admin View", "Availabilit
 
 # --- Student Sign-Up Tab ---
 if selected_tab == "Sign-Up":
+    pacific = pytz.timezone("US/Pacific")
+    now = datetime.now(pacific)
+    st.markdown(f"Current Pacific Time: {now.strftime('%A, %B %d, %Y %I:%M %p')}")
     st.title("Student AT Appointment Sign-Up")
+
+    st.markdown("""
+    **Please read before booking:**
+    - You may sign up for either location (SLO or NCC) 
+    - You may only sign up for **one appointment per week**.
+    - DSPS students may book a **double time block** if needed by clicking "I am a DSPS student".
+    - You can reschedule future appointments, but you **cannot reschedule on the day** of your scheduled appointment.
+    """)
 
     lab_location = st.selectbox("Choose your AT Lab location:", ["SLO AT Lab", "NCC AT Lab"])
     slots_by_day = slo_slots_by_day if lab_location == "SLO AT Lab" else ncc_slots_by_day
@@ -122,10 +134,12 @@ if selected_tab == "Sign-Up":
 
         st.subheader("Available Time Slots")
         selected_day = st.selectbox("Choose a day:", list(slots_by_day.keys()))
+        pacific = pytz.timezone("US/Pacific")
+        now = datetime.now(pacific)
         available_slots = [
             s for s in slots_by_day[selected_day]
             if s not in bookings_df["slot"].values and
-            datetime.strptime(f"{s.split()[1]} {s.split()[2].split('–')[0]} {s.split()[3]}", "%m/%d/%y %I:%M %p") > datetime.now()
+            pacific.localize(datetime.strptime(f"{s.split()[1]} {s.split()[2].split('–')[0]} {s.split()[3]}", "%m/%d/%y %I:%M %p")) > now
         ]
 
         double_blocks = {}
@@ -138,11 +152,7 @@ if selected_tab == "Sign-Up":
         if dsps:
             double_slot_options = [
                 label for label in double_blocks
-                if all(
-                    s not in bookings_df["slot"].values and
-                    datetime.strptime(f"{s.split()[1]} {s.split()[2].split('–')[0]} {s.split()[3]}", "%m/%d/%y %I:%M %p") > datetime.now()
-                    for s in double_blocks[label]
-                )
+                if all(s not in bookings_df["slot"].values for s in double_blocks[label])
             ]
             if double_slot_options:
                 selected_block = st.selectbox("Choose a double time block:", double_slot_options)
@@ -168,16 +178,46 @@ if selected_tab == "Sign-Up":
 
         if st.button("Confirm"):
             selected_week = datetime.strptime(st.session_state.selected_slot.split(" ")[1], "%m/%d/%y").isocalendar().week
+            selected_day_str = st.session_state.selected_slot.split(" ")[1]
+
+            existing_booking_same_day = bookings_df[
+                (bookings_df["email"] == email) &
+                (bookings_df["slot"].str.contains(selected_day_str))
+            ]
+
+            if not existing_booking_same_day.empty:
+                st.warning("You already have a booking today. You cannot reschedule same-day appointments.")
+                st.stop()
+
             booked_weeks = bookings_df[bookings_df["email"] == email]["slot"].apply(
                 lambda s: datetime.strptime(s.split(" ")[1], "%m/%d/%y").isocalendar().week
             )
 
             if selected_week in booked_weeks.values:
-                st.warning("You already have a booking this week. Your previous booking will be replaced.")
+                # Prevent rescheduling if there's already a booking on the same day
+                existing_booking_today = bookings_df[
+                    (bookings_df["email"] == email) &
+                    (bookings_df["slot"].str.contains(datetime.now(pacific).strftime("%m/%d/%y")))
+                ]
+                if not existing_booking_today.empty:
+                    st.warning("You already have a booking today. Rescheduling to another day is not allowed on the day of your appointment.")
+                    st.stop()
+
                 bookings_df = bookings_df[~((bookings_df["email"] == email) & (bookings_df["slot"].apply(
                     lambda s: datetime.strptime(s.split(" ")[1], "%m/%d/%y").isocalendar().week == selected_week)))]
 
             if dsps and " and " in st.session_state.selected_slot:
+                # Block rescheduling to or from today for DSPS double bookings
+                same_day_conflict = any(
+                    selected_day_str in s for s in bookings_df[bookings_df["email"] == email]["slot"]
+                )
+                existing_booking_today = bookings_df[
+                    (bookings_df["email"] == email) &
+                    (bookings_df["slot"].str.contains(datetime.now(pacific).strftime("%m/%d/%y")))
+                ]
+                if same_day_conflict or (not existing_booking_today.empty and selected_day_str != datetime.now(pacific).strftime("%m/%d/%y")):
+                    st.warning("You already have a booking today. Rescheduling to or from the same day is not allowed.")
+                    st.stop()
                 for s in st.session_state.selected_slot.split(" and "):
                     new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": s, "lab_location": lab_location }])
                     bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
@@ -279,41 +319,21 @@ elif selected_tab == "Admin View":
     elif passcode_input:
         st.error("Incorrect passcode.")
 
-# --- Availability Settings Tab (from old setup without SLO and NCC location differences) ---
+# --- Availability Settings Tab ---
 elif selected_tab == "Availability Settings":
-    st.title("Availability Settings")
-    availability_passcode = st.text_input("Enter availability admin passcode:", type="password")
+    st.title("Availability Settings Panel")
+    passcode_input = st.text_input("Enter availability settings passcode:", type="password")
 
-    if availability_passcode == AVAILABILITY_PASSCODE:
-        st.success("Access granted to Availability Settings.")
+    if passcode_input == AVAILABILITY_PASSCODE:
+        st.success("Access granted.")
 
-        if os.path.exists(AVAILABLE_FILE):
-            availability_df = pd.read_csv(AVAILABLE_FILE)
-        else:
-            availability_df = pd.DataFrame({"slot": single_slots, "available": [True]*len(single_slots)})
+        st.write("Coming soon: Admin tools to adjust available lab hours and time blocks dynamically.")
 
-        selected_by_day = {}
-        for day, slots in slots_by_day.items():
-            with st.expander(day):
-                if st.button(f"Select All {day}", key=f"select_all_{day}"):
-                    for slot in slots:
-                        st.session_state[f"avail_{slot}"] = True
-                if st.button(f"Deselect All {day}", key=f"deselect_all_{day}"):
-                    for slot in slots:
-                        st.session_state[f"avail_{slot}"] = False
+        # Future expansion example:
+        # - View current SLO/NCC schedules
+        # - Upload new availability CSV
+        # - Enable/disable specific days
+        # - Temporarily override availability for holidays
 
-                selected_by_day[day] = []
-                for slot in slots:
-                    is_selected = availability_df.loc[availability_df["slot"] == slot, "available"].values[0] if slot in availability_df["slot"].values else False
-                    checked = st.checkbox(slot.split()[-2] + " " + slot.split()[-1], value=st.session_state.get(f"avail_{slot}", is_selected), key=f"avail_{slot}")
-                    if checked:
-                        selected_by_day[day].append(slot)
-
-        selected_available = [slot for slots in selected_by_day.values() for slot in slots]
-        availability_df["available"] = availability_df["slot"].isin(selected_available)
-
-        if st.button("Save Availability"):
-            availability_df.to_csv(AVAILABLE_FILE, index=False)
-            st.success("Availability updated successfully!")
-    elif availability_passcode:
+    elif passcode_input:
         st.error("Incorrect passcode.")
