@@ -8,8 +8,8 @@ st.set_page_config(page_title="Student Appointment Sign-Up", layout="wide")
 
 BOOKINGS_FILE = "bookings.csv"
 AVAILABLE_FILE = "available_slots.csv"
-ADMIN_PASSCODE = "cougar2025"
-AVAILABILITY_PASSCODE = "atlabadmin2025"
+ADMIN_PASSCODE = st.secrets["ADMIN_PASSCODE"]
+AVAILABILITY_PASSCODE = st.secrets["AVAILABILITY_PASSCODE"]
 
 # --- Initialize Session State ---
 if "selected_slot" not in st.session_state:
@@ -122,15 +122,28 @@ if selected_tab == "Sign-Up":
 
         st.subheader("Available Time Slots")
         selected_day = st.selectbox("Choose a day:", list(slots_by_day.keys()))
-        available_slots = [s for s in slots_by_day[selected_day] if s not in bookings_df["slot"].values]
+        available_slots = [
+            s for s in slots_by_day[selected_day]
+            if s not in bookings_df["slot"].values and
+            datetime.strptime(f"{s.split()[1]} {s.split()[2].split('–')[0]} {s.split()[3]}", "%m/%d/%y %I:%M %p") > datetime.now()
+        ]
 
         double_blocks = {}
         for i in range(len(slots_by_day[selected_day]) - 1):
-            if slots_by_day[selected_day][i].split()[1] == slots_by_day[selected_day][i+1].split()[1]:
-                double_blocks[f"{slots_by_day[selected_day][i]} and {slots_by_day[selected_day][i+1]}"] = [slots_by_day[selected_day][i], slots_by_day[selected_day][i+1]]
+            if slots_by_day[selected_day][i].split()[1] == slots_by_day[selected_day][i + 1].split()[1]:
+                double_blocks[f"{slots_by_day[selected_day][i]} and {slots_by_day[selected_day][i + 1]}"] = [
+                    slots_by_day[selected_day][i], slots_by_day[selected_day][i + 1]
+                ]
 
         if dsps:
-            double_slot_options = [label for label in double_blocks if all(s not in bookings_df["slot"].values for s in double_blocks[label])]
+            double_slot_options = [
+                label for label in double_blocks
+                if all(
+                    s not in bookings_df["slot"].values and
+                    datetime.strptime(f"{s.split()[1]} {s.split()[2].split('–')[0]} {s.split()[3]}", "%m/%d/%y %I:%M %p") > datetime.now()
+                    for s in double_blocks[label]
+                )
+            ]
             if double_slot_options:
                 selected_block = st.selectbox("Choose a double time block:", double_slot_options)
                 if st.button("Select This Time Block"):
