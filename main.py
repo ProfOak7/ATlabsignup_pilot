@@ -3,6 +3,8 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 import pytz
+import smtplib
+from email.mime.text import MIMEText
 
 # --- Configuration ---
 st.set_page_config(page_title="Student Appointment Sign-Up", layout="wide")
@@ -80,6 +82,33 @@ all_single_slots = slo_single_slots + ncc_single_slots
 # --- Navigation ---
 st.sidebar.title("Navigation")
 selected_tab = st.sidebar.radio("Go to:", ["Sign-Up", "Admin View", "Availability Settings"])
+
+def send_confirmation_email(to_email, student_name, slot):
+    sender_email = st.secrets["EMAIL_ADDRESS"]
+    password = st.secrets["EMAIL_PASSWORD"]
+    subject = "AT Lab Appointment Confirmation"
+    body = f"""Hi {student_name},
+
+    Your appointment has been successfully booked for:
+
+    {slot}
+
+    See you at the AT Lab!
+
+    - Cuesta College"""
+
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = to_email
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(sender_email, password)
+            server.sendmail(sender_email, to_email, msg.as_string())
+    except Exception as e:
+        st.warning(f"Email could not be sent: {e}")
 
 # --- Student Sign-Up Tab ---
 if selected_tab == "Sign-Up":
@@ -180,44 +209,62 @@ if selected_tab == "Sign-Up":
             selected_week = datetime.strptime(st.session_state.selected_slot.split(" ")[1], "%m/%d/%y").isocalendar().week
             selected_day_str = st.session_state.selected_slot.split(" ")[1]
 
-            existing_booking_same_day = bookings_df[
-                (bookings_df["email"] == email) &
-                (bookings_df["slot"].str.contains(selected_day_str))
-            ]
-
-            if not existing_booking_same_day.empty:
-                st.warning("You already have a booking today. You cannot reschedule same-day appointments.")
-                st.stop()
+            
 
             booked_weeks = bookings_df[bookings_df["email"] == email]["slot"].apply(
                 lambda s: datetime.strptime(s.split(" ")[1], "%m/%d/%y").isocalendar().week
             )
 
             if selected_week in booked_weeks.values:
-                # Prevent rescheduling if there's already a booking on the same day
-                existing_booking_today = bookings_df[
-                    (bookings_df["email"] == email) &
-                    (bookings_df["slot"].str.contains(datetime.now(pacific).strftime("%m/%d/%y")))
-                ]
-                if not existing_booking_today.empty:
-                    st.warning("You already have a booking today. Rescheduling to another day is not allowed on the day of your appointment.")
+                new_slot_date = datetime.strptime(selected_day_str, "%m/%d/%y").date()
+                existing_bookings = bookings_df[bookings_df["email"] == email]
+
+                block_reschedule = False
+                updated_bookings = []
+
+                for i, row in existing_bookings.iterrows():
+                    existing_date = datetime.strptime(row["slot"].split(" ")[1], "%m/%d/%y").date()
+                    existing_week = existing_date.isocalendar().week
+
+                    # If they are trying to reschedule a booking from today to a future day
+                    if existing_date == now.date() and selected_week == existing_week and new_slot_date != now.date():
+                        block_reschedule = True
+                        break
+
+                    # Otherwise mark this row to delete only if it's in same week (non-today)
+                    if existing_week == selected_week and existing_date != now.date():
+                        updated_bookings.append(i)
+
+                if block_reschedule:
+                    st.warning("You already have a booking today. Rescheduling it to another day is not allowed once the day has begun.")
                     st.stop()
 
-                bookings_df = bookings_df[~((bookings_df["email"] == email) & (bookings_df["slot"].apply(
-                    lambda s: datetime.strptime(s.split(" ")[1], "%m/%d/%y").isocalendar().week == selected_week)))]
+                bookings_df = bookings_df.drop(updated_bookings)
 
             if dsps and " and " in st.session_state.selected_slot:
-                # Block rescheduling to or from today for DSPS double bookings
-                same_day_conflict = any(
-                    selected_day_str in s for s in bookings_df[bookings_df["email"] == email]["slot"]
-                )
-                existing_booking_today = bookings_df[
-                    (bookings_df["email"] == email) &
-                    (bookings_df["slot"].str.contains(datetime.now(pacific).strftime("%m/%d/%y")))
-                ]
-                if same_day_conflict or (not existing_booking_today.empty and selected_day_str != datetime.now(pacific).strftime("%m/%d/%y")):
-                    st.warning("You already have a booking today. Rescheduling to or from the same day is not allowed.")
+                selected_week = datetime.strptime(selected_day_str, "%m/%d/%y").isocalendar().week
+                new_slot_date = datetime.strptime(selected_day_str, "%m/%d/%y").date()
+                existing_bookings = bookings_df[bookings_df["email"] == email]
+
+                block_reschedule = False
+                updated_bookings = []
+
+                for i, row in existing_bookings.iterrows():
+                    existing_date = datetime.strptime(row["slot"].split(" ")[1], "%m/%d/%y").date()
+                    existing_week = existing_date.isocalendar().week
+
+                    if existing_date == now.date() and selected_week == existing_week and new_slot_date != now.date():
+                        block_reschedule = True
+                        break
+
+                    if existing_week == selected_week and existing_date != now.date():
+                        updated_bookings.append(i)
+
+                if block_reschedule:
+                    st.warning("You already have a booking today. Rescheduling it to another day is not allowed once the day has begun.")
                     st.stop()
+
+                bookings_df = bookings_df.drop(updated_bookings)
                 for s in st.session_state.selected_slot.split(" and "):
                     new_booking = pd.DataFrame([{ "name": name, "email": email, "student_id": student_id, "dsps": dsps, "slot": s, "lab_location": lab_location }])
                     bookings_df = pd.concat([bookings_df, new_booking], ignore_index=True)
@@ -227,6 +274,11 @@ if selected_tab == "Sign-Up":
 
             bookings_df.to_csv(BOOKINGS_FILE, index=False)
             st.success(f"Successfully booked {st.session_state.selected_slot}!")
+            if selected_week in booked_weeks.values:
+                st.info("You already had an appointment this week. It has been rescheduled.")
+                send_confirmation_email(email, name, st.session_state.selected_slot + " (Rescheduled)")
+            else:
+                send_confirmation_email(email, name, st.session_state.selected_slot)
             st.session_state.selected_slot = None
             st.session_state.confirming = False
             st.stop()
